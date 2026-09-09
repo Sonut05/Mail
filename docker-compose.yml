@@ -27,6 +27,8 @@ services:
     restart: unless-stopped
     command: >
       sh -c "flask db upgrade && gunicorn -b 0.0.0.0:5000 -w 4 --timeout 120 'app:create_app()'"
+    expose:
+      - "5000"
     ports:
       - "5000:5000"
     environment:
@@ -39,8 +41,8 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       CREATE_DB_TABLES_ON_STARTUP: "false"
     depends_on:
       db:
@@ -78,6 +80,19 @@ services:
         condition: service_healthy
       web:
         condition: service_started
+    networks:
+      - internal_net
+
+  # ── React Frontend & Nginx Reverse Proxy ───────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PORT:-80}:80"
+    depends_on:
+      - web
     networks:
       - internal_net
 
