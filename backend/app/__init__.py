@@ -72,11 +72,13 @@ def create_app(config_class: type = Config) -> Flask:
     register_blueprints(app)
 
     # ── Database Initialization Guard ───────────────────────
-    # In production, migrations manage tables. db.create_all is strictly for SQLite local dev/tests.
     with app.app_context():
         from app import models  # noqa: F401 — force model registration
         if app.config.get("CREATE_DB_TABLES_ON_STARTUP", True):
-            db.create_all()
+            try:
+                db.create_all()
+            except Exception as exc:
+                app.logger.warning("db.create_all encountered an issue (tables likely exist): %s", exc)
 
     # ── Correlation ID and Structured Logging Middleware ───
     @app.before_request
