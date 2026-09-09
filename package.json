@@ -4,9 +4,12 @@
   "private": true,
   "type": "module",
   "description": "MailMind AI — Root Monorepo Orchestration for Netlify Deployment",
+  "workspaces": [
+    "frontend"
+  ],
   "scripts": {
-    "build": "npm run build --prefix frontend",
-    "build:netlify": "npm run build --prefix frontend && node scripts/prepare-netlify.js",
+    "build": "npm install --prefix frontend && npm run build --prefix frontend",
+    "build:netlify": "npm install --prefix frontend && npm run build --prefix frontend && node scripts/prepare-netlify.js",
     "prepare:netlify": "node scripts/prepare-netlify.js"
   }
 }
