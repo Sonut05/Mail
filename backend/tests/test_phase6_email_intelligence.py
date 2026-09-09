@@ -57,9 +57,16 @@ from app.services.ai_service import (
 )
 
 
+from sqlalchemy.pool import StaticPool
+
+
 class TestPhase6Config(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "poolclass": StaticPool,
+        "connect_args": {"check_same_thread": False},
+    }
     SECRET_KEY = "test-phase6-secret-key"
     ENCRYPTION_KEY = "T8gjWZab-gRjl9cfFcdGHPP1zYmVPMOaDCGTO3QScik="
     GOOGLE_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
