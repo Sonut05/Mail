@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Netlify Configuration for MailMind AI (Frontend + Serverless Backend)
+# ─────────────────────────────────────────────────────────────────────────────
+
+[build]
+  command = "npm run build:netlify"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
+
+[build.environment]
+  PYTHON_VERSION = "3.11"
+  NODE_VERSION = "20"
+
+[functions]
+  directory = "netlify/functions"
+
+# ── API and Health Route Rewrites ──────────────────────────────────────────
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/api/health"
+  status = 200
+
+[[redirects]]
+  from = "/ready"
+  to = "/.netlify/functions/api/ready"
+  status = 200
+
+# ── SPA Client-Side Routing Fallback ───────────────────────────────────────
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# ── Production Security Headers ───────────────────────────────────────────
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://*.googleapis.com; frame-ancestors 'self';"

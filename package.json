@@ -1,0 +1,12 @@
+{
+  "name": "mailmind-ai-root",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MailMind AI — Root Monorepo Orchestration for Netlify Deployment",
+  "scripts": {
+    "build": "npm run build --prefix frontend",
+    "build:netlify": "npm run build --prefix frontend && node scripts/prepare-netlify.js",
+    "prepare:netlify": "node scripts/prepare-netlify.js"
+  }
+}

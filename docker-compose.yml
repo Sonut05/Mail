@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mailmind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+      POSTGRES_DB: ${POSTGRES_DB:-mailmind_db}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mailmind} -d ${POSTGRES_DB:-mailmind_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal_net
+
+  # ── Flask / Gunicorn Web API ────────────────────────────────────
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: >
+      sh -c "flask db upgrade && gunicorn -b 0.0.0.0:5000 -w 4 --timeout 120 'app:create_app()'"
+    ports:
+      - "5000:5000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mailmind}:${POSTGRES_PASSWORD:-change_me_in_production}@db:5432/${POSTGRES_DB:-mailmind_db}
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-true}
+      CREATE_DB_TABLES_ON_STARTUP: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    networks:
+      - internal_net
+
+  # ── Standalone AI Background Worker ────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: python worker.py
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mailmind}:${POSTGRES_PASSWORD:-change_me_in_production}@db:5432/${POSTGRES_DB:-mailmind_db}
+      FLASK_ENV: production
+      SECRET_KEY: ${SECRET_KEY}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      AI_JOB_POLL_INTERVAL: ${AI_JOB_POLL_INTERVAL:-1.0}
+      AI_JOB_STALE_SECONDS: ${AI_JOB_STALE_SECONDS:-300}
+      AI_JOB_MAX_ATTEMPTS: ${AI_JOB_MAX_ATTEMPTS:-3}
+      AI_WORKER_ID: ${AI_WORKER_ID:-worker-docker-1}
+      AI_JOB_ALWAYS_EAGER: "false"
+      CREATE_DB_TABLES_ON_STARTUP: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - internal_net
+
+networks:
+  internal_net:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
