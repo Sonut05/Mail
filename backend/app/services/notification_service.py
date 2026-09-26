@@ -4,11 +4,14 @@ Notification Service — User-scoped notification creation, deduplication, readi
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from typing import Any
 
 from app.extensions import db
 from app.models.notification import Notification, NotificationType, NotificationSeverity
+
+_notif_lock = threading.Lock()
 
 
 def create_notification_if_not_exists(
@@ -23,31 +26,7 @@ def create_notification_if_not_exists(
     """Idempotently create a notification for a user.
     Deduplicates identical logical notifications using (user_id, notif_type, source_type, source_id).
     """
-    if source_type and source_id:
-        existing = Notification.query.filter_by(
-            user_id=user_id,
-            type=notif_type,
-            source_type=source_type,
-            source_id=str(source_id)
-        ).first()
-        if existing:
-            return existing
-
-    notif = Notification(
-        user_id=user_id,
-        type=notif_type,
-        title=title[:255],
-        message=message,
-        severity=severity,
-        source_type=source_type,
-        source_id=str(source_id) if source_id else None,
-    )
-    try:
-        db.session.add(notif)
-        db.session.commit()
-        return notif
-    except Exception:
-        db.session.rollback()
+    with _notif_lock:
         if source_type and source_id:
             existing = Notification.query.filter_by(
                 user_id=user_id,
@@ -57,7 +36,32 @@ def create_notification_if_not_exists(
             ).first()
             if existing:
                 return existing
-        raise
+
+        notif = Notification(
+            user_id=user_id,
+            type=notif_type,
+            title=title[:255],
+            message=message,
+            severity=severity,
+            source_type=source_type,
+            source_id=str(source_id) if source_id else None,
+        )
+        try:
+            db.session.add(notif)
+            db.session.commit()
+            return notif
+        except Exception:
+            db.session.rollback()
+            if source_type and source_id:
+                existing = Notification.query.filter_by(
+                    user_id=user_id,
+                    type=notif_type,
+                    source_type=source_type,
+                    source_id=str(source_id)
+                ).first()
+                if existing:
+                    return existing
+            raise
 
 
 def get_user_notifications(

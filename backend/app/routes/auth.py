@@ -98,10 +98,17 @@ def google_login():
 
     # Check if mock simulation is explicitly requested or client ID is placeholder
     mock = request.args.get("mock", "false").lower() == "true"
+    if current_app.config.get("ENV") == "production":
+        if mock:
+            return jsonify({"error": "Mock authentication is disabled in production."}), 404
+        allow_mock = False
+    else:
+        allow_mock = True
+
     client_id = current_app.config.get("GOOGLE_CLIENT_ID", "")
     is_placeholder = not client_id or "googleusercontent.com" not in client_id
 
-    if mock or is_placeholder:
+    if allow_mock and (mock or is_placeholder):
         try:
             demo_email = "demo.developer@gmail.com"
             user = db.session.get(User, user_id) if user_id else None

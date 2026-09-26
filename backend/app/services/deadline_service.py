@@ -54,13 +54,31 @@ AMBIGUOUS_PATTERNS = [
 ]
 
 
-def _get_user_tz(user_timezone: str | None) -> ZoneInfo:
-    """Safely get ZoneInfo or fallback to UTC."""
+def _get_user_tz(user_timezone: str | None) -> Any:
+    """Safely get ZoneInfo or fallback to dateutil.tz or UTC."""
     if not user_timezone:
         return ZoneInfo("UTC")
     try:
-        return ZoneInfo(user_timezone)
+        tz = ZoneInfo(user_timezone)
+        # Check if tz has valid offset on platforms like Windows
+        test_dt = datetime(2026, 11, 1, 12, 0, 0, tzinfo=tz)
+        if user_timezone not in ("UTC", "GMT", "Etc/UTC") and test_dt.utcoffset() == timedelta(0):
+            try:
+                import dateutil.tz
+                dtz = dateutil.tz.gettz(user_timezone)
+                if dtz is not None:
+                    return dtz
+            except Exception:
+                pass
+        return tz
     except Exception:
+        try:
+            import dateutil.tz
+            dtz = dateutil.tz.gettz(user_timezone)
+            if dtz is not None:
+                return dtz
+        except Exception:
+            pass
         return ZoneInfo("UTC")
 
 

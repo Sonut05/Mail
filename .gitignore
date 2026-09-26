@@ -63,3 +63,4 @@ dist/
 # Netlify Function Packaging Output (generated dynamically at build time)
 netlify/functions/app/
 Thumbs.db
+_pyfix/
