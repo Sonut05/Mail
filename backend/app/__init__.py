@@ -65,7 +65,7 @@ def create_app(config_class: type = Config) -> Flask:
                 "Flask-Limiter running with in-memory storage in production. Configure REDIS_URL for multi-worker deployments."
             )
 
-    app.config.setdefault("RATELIMIT_DEFAULT", ["200 per day", "50 per hour"])
+    app.config.setdefault("RATELIMIT_DEFAULT", "200 per day; 50 per hour")
     if "RATELIMIT_ENABLED" not in app.config:
         app.config["RATELIMIT_ENABLED"] = not app.config.get("TESTING", False)
 

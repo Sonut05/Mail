@@ -364,6 +364,8 @@ class TestRateLimiting(unittest.TestCase):
     """Regression tests verifying endpoint rate limiting enforcement."""
 
     def setUp(self):
+        from app.services.auth_security import reset_lockout_state
+        reset_lockout_state()
         self.app = create_app(RateLimitTestConfig)
         self.client = self.app.test_client()
         with self.app.app_context():
@@ -401,7 +403,7 @@ class TestRateLimiting(unittest.TestCase):
         for i in range(7):
             res = self.client.post("/api/auth/register", json={
                 "email": f"user{i}@example.com",
-                "password": "password123",
+                "password": "StrongPassword123!",
                 "name": f"User {i}"
             })
             responses.append(res.status_code)
@@ -413,15 +415,144 @@ class TestRateLimiting(unittest.TestCase):
 
     def test_rate_limiting_disabled_in_standard_testing_mode(self):
         """Standard test config (TESTING=True, RATELIMIT_ENABLED not explicitly set) must not throttle."""
+        from app.services.auth_security import reset_lockout_state
+        reset_lockout_state()
         default_test_app = create_app(TestSecurityConfig)
         client = default_test_app.test_client()
 
         statuses = []
-        for _ in range(12):
-            res = client.post("/api/auth/login", json={"email": "nobody@example.com", "password": "x"})
+        for i in range(12):
+            res = client.post("/api/auth/login", json={"email": f"unique_user_{i}@example.com", "password": "x"})
             statuses.append(res.status_code)
 
         # All requests should return 401 (not 429)
         self.assertTrue(all(s == 401 for s in statuses))
+
+
+class TestPasswordAndAccountSecurity(unittest.TestCase):
+    """Tests for password complexity, account lockout, and email enumeration defense."""
+
+    def setUp(self):
+        from app.services.auth_security import reset_lockout_state
+        reset_lockout_state()
+        self.app = create_app(TestSecurityConfig)
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+
+    def test_password_length_enforcement(self):
+        """Passwords under 10 characters must be rejected with 400."""
+        res = self.client.post("/api/auth/register", json={
+            "email": "short@example.com",
+            "password": "Short1!",
+            "name": "Short Pass"
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("at least 10 characters", res.get_json()["error"])
+
+    def test_common_breached_password_rejection(self):
+        """Common easily guessed passwords must be rejected."""
+        res = self.client.post("/api/auth/register", json={
+            "email": "weak@example.com",
+            "password": "password123",
+            "name": "Weak Pass"
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("too common and easily guessed", res.get_json()["error"])
+
+    def test_pure_numeric_or_alphabetic_password_rejection(self):
+        """Passwords cannot be entirely digits or entirely letters."""
+        # Pure digits
+        res_num = self.client.post("/api/auth/register", json={
+            "email": "num@example.com",
+            "password": "1234567890123",
+            "name": "Num Pass"
+        })
+        self.assertEqual(res_num.status_code, 400)
+        self.assertIn("cannot consist entirely of numbers", res_num.get_json()["error"])
+
+        # Pure letters
+        res_alpha = self.client.post("/api/auth/register", json={
+            "email": "alpha@example.com",
+            "password": "abcdefghijklmno",
+            "name": "Alpha Pass"
+        })
+        self.assertEqual(res_alpha.status_code, 400)
+        self.assertIn("contain a mix of letters and numbers", res_alpha.get_json()["error"])
+
+    def test_email_username_in_password_rejection(self):
+        """Password containing the email username must be rejected."""
+        res = self.client.post("/api/auth/register", json={
+            "email": "charlie@example.com",
+            "password": "charlie123456!",
+            "name": "Charlie"
+        })
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("cannot contain your email username", res.get_json()["error"])
+
+    def test_strong_password_registration_success(self):
+        """Valid strong password passes registration and logs in."""
+        res = self.client.post("/api/auth/register", json={
+            "email": "alice.security@example.com",
+            "password": "StrongSecurityPassword123!",
+            "name": "Alice Security"
+        })
+        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.get_json()["user"]["email"], "alice.security@example.com")
+
+    def test_generic_login_failure_prevents_email_enumeration(self):
+        """Login failure messages must be identical for non-existent users and wrong passwords."""
+        # Register a valid user
+        self.client.post("/api/auth/register", json={
+            "email": "target@example.com",
+            "password": "CorrectPassword123!",
+            "name": "Target"
+        })
+
+        # Wrong password for existing user
+        res_existing = self.client.post("/api/auth/login", json={
+            "email": "target@example.com",
+            "password": "WrongPassword999!"
+        })
+        self.assertEqual(res_existing.status_code, 401)
+        err_existing = res_existing.get_json()["error"]
+
+        # Non-existent user
+        res_nonexistent = self.client.post("/api/auth/login", json={
+            "email": "doesnotexist@example.com",
+            "password": "AnyPassword123!"
+        })
+        self.assertEqual(res_nonexistent.status_code, 401)
+        err_nonexistent = res_nonexistent.get_json()["error"]
+
+        # Must be completely identical
+        self.assertEqual(err_existing, err_nonexistent)
+        self.assertEqual(err_existing, "Invalid email or password.")
+
+    def test_account_lockout_after_five_failed_attempts(self):
+        """Account is locked for 15 minutes after 5 consecutive failed logins."""
+        # Register user
+        self.client.post("/api/auth/register", json={
+            "email": "victim@example.com",
+            "password": "CorrectPassword123!",
+            "name": "Victim"
+        })
+
+        # 5 failed attempts
+        for _ in range(5):
+            res = self.client.post("/api/auth/login", json={
+                "email": "victim@example.com",
+                "password": "WrongPassword123!"
+            })
+            self.assertIn(res.status_code, (401, 429))
+
+        # 6th attempt must be locked out with 429
+        locked_res = self.client.post("/api/auth/login", json={
+            "email": "victim@example.com",
+            "password": "CorrectPassword123!"  # Even correct password is locked
+        })
+        self.assertEqual(locked_res.status_code, 429)
+        data = locked_res.get_json()
+        self.assertIn("Account temporarily locked", data.get("error", ""))
 
 

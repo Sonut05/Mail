@@ -24,6 +24,12 @@ from app.models.user import User
 from app.models.connected_email_account import ConnectedEmailAccount
 from app.services.encryption import encrypt_token, decrypt_token
 from app.utils.auth import login_required, rotate_session
+from app.services.auth_security import (
+    validate_password_strength,
+    is_account_locked,
+    record_failed_login,
+    record_successful_login,
+)
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -370,6 +376,11 @@ def register():
         if not email or not password:
             return jsonify({"error": "Email and password are required."}), 400
 
+        # Validate password strength (NIST SP 800-63B + weak dictionary check)
+        valid, err_msg = validate_password_strength(password, email)
+        if not valid:
+            return jsonify({"error": err_msg}), 400
+
         # Check if user already exists
         existing_user = User.query.filter_by(email=email).first()
         if existing_user:
@@ -404,9 +415,21 @@ def login():
         if not email or not password:
             return jsonify({"error": "Email and password are required."}), 400
 
+        # Check if account is locked due to repeated failed logins
+        locked, remaining_sec = is_account_locked(email)
+        if locked:
+            return jsonify({
+                "error": "Account temporarily locked",
+                "message": f"Too many failed login attempts. Please try again in {remaining_sec} seconds."
+            }), 429
+
         user = User.query.filter_by(email=email).first()
         if not user or user.provider != "local" or not user.check_password(password):
+            record_failed_login(email)
             return jsonify({"error": "Invalid email or password."}), 401
+
+        # Clear failed login attempts upon successful authentication
+        record_successful_login(email)
 
         # Log user in by setting rotated session
         rotate_session(user.id)
