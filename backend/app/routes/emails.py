@@ -33,6 +33,7 @@ from app.services.job_queue_service import (
 )
 
 from app.utils.auth import login_required, validate_session
+from app.schemas import validate_schema, GenerateReplyPayload, AnalyzeBatchPayload
 
 emails_bp = Blueprint("emails", __name__, url_prefix="/api/emails")
 
@@ -1387,6 +1388,7 @@ def sync_emails():
 @emails_bp.route("/generate-reply", methods=["POST"])
 @login_required
 @limiter.limit("10 per minute; 100 per day")
+@validate_schema(GenerateReplyPayload)
 def generate_reply_standalone():
     """Generate a reply to an email body without a connected mailbox."""
     try:

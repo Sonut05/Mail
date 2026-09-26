@@ -19,7 +19,9 @@ try:
 except Exception:
     pypdf = None
 
+import io
 from app.utils.auth import login_required, validate_session
+from app.utils.security import validate_pdf_upload
 
 resume_bp = Blueprint("resume", __name__, url_prefix="/api/resume")
 
@@ -120,14 +122,20 @@ def save_profile():
             if file.filename != "":
                 filename = file.filename.lower()
                 if filename.endswith(".txt"):
-                    resume_text = file.read().decode("utf-8", errors="ignore")
+                    content_bytes = file.read(5 * 1024 * 1024 + 1)
+                    if len(content_bytes) > 5 * 1024 * 1024:
+                        return jsonify({"error": "Text resume exceeds 5MB size limit."}), 400
+                    resume_text = content_bytes.decode("utf-8", errors="ignore")[:100000]
                 elif filename.endswith(".pdf"):
+                    is_valid, err_msg, file_bytes = validate_pdf_upload(file)
+                    if not is_valid:
+                        return jsonify({"error": err_msg or "Invalid PDF file."}), 400
                     if pypdf is None:
                         return jsonify({"error": "pypdf is not installed. Please install pypdf or upload a .txt file."}), 400
                     try:
-                        reader = pypdf.PdfReader(file)
+                        reader = pypdf.PdfReader(io.BytesIO(file_bytes))
                         text_list = [page.extract_text() for page in reader.pages]
-                        resume_text = "\n".join([t for t in text_list if t])
+                        resume_text = "\n".join([t for t in text_list if t])[:100000]
                     except Exception as e:
                         current_app.logger.warning("Could not parse PDF: %s", e)
                         return jsonify({"error": f"Failed to parse PDF resume: {str(e)}"}), 400
