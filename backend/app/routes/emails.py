@@ -11,7 +11,7 @@ from typing import Optional
 from flask import Blueprint, jsonify, request, session, current_app
 from sqlalchemy import or_, and_, func
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import User, EmailMessage, Entity, Task, CalendarEvent, Reminder, AIAnalysisJob
 from app.services.encryption import decrypt_token
 from app.services.gmail_service import (
@@ -390,6 +390,7 @@ def get_contact_insights():
 
 @emails_bp.route("/analyze", methods=["POST"])
 @login_required
+@limiter.limit("10 per minute; 100 per day")
 def analyze_emails_batch():
     """Batch analyze emails for the authenticated user.
 
@@ -550,6 +551,7 @@ def get_email(email_id: str):
 
 @emails_bp.route("/<string:email_id>/retry", methods=["POST"])
 @login_required
+@limiter.limit("10 per minute; 100 per day")
 def retry_single_email_analysis(email_id: str):
     """Retry AI analysis for an email up to MAX_RETRIES (3)."""
     user, err = _require_auth()
@@ -615,6 +617,7 @@ def retry_single_email_analysis(email_id: str):
 
 @emails_bp.route("/<string:email_id>/analyze", methods=["POST"])
 @login_required
+@limiter.limit("10 per minute; 100 per day")
 def analyze_single_email(email_id: str):
     """Analyze a single email with AI and store intelligence results.
 
@@ -1383,6 +1386,7 @@ def sync_emails():
 
 @emails_bp.route("/generate-reply", methods=["POST"])
 @login_required
+@limiter.limit("10 per minute; 100 per day")
 def generate_reply_standalone():
     """Generate a reply to an email body without a connected mailbox."""
     try:

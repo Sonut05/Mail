@@ -18,7 +18,7 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build as build_service
 from itsdangerous import URLSafeTimedSerializer
 
-from app.extensions import db
+from app.extensions import db, limiter
 
 from app.models.user import User
 from app.models.connected_email_account import ConnectedEmailAccount
@@ -83,6 +83,7 @@ def _build_flow(state: str | None = None) -> Flow:
 
 @auth_bp.route("/google", methods=["GET"])
 @auth_bp.route("/google/login", methods=["GET"])
+@limiter.limit("5 per minute; 20 per hour")
 def google_login():
     """Redirect user to Google's official OAuth consent screen.
     
@@ -176,6 +177,7 @@ def google_login():
 
 
 @auth_bp.route("/google/callback", methods=["GET"])
+@limiter.limit("5 per minute; 20 per hour")
 def google_callback():
     """Handle Google's OAuth callback: validate state, exchange code, store tokens safely."""
     frontend_url = current_app.config.get("FRONTEND_URL", "http://localhost:3000")
@@ -355,6 +357,7 @@ def logout():
 
 
 @auth_bp.route("/register", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour")
 def register():
     """Register a new user with email and password, name, and contact number."""
     try:
@@ -390,6 +393,7 @@ def register():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute; 20 per hour")
 def login():
     """Login a user with email and password."""
     try:

@@ -348,3 +348,80 @@ class TestAuthorizationAccessControlAudit(unittest.TestCase):
         self.assertEqual(res.status_code, 403)
 
 
+class RateLimitTestConfig(Config):
+    TESTING = True
+    RATELIMIT_ENABLED = True
+    RATELIMIT_STORAGE_URI = "memory://"
+    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+    SECRET_KEY = "test-rate-limit-secret-key-12345"
+    ENCRYPTION_KEY = "T8gjWZab-gRjl9cfFcdGHPP1zYmVPMOaDCGTO3QScik="
+    GOOGLE_CLIENT_ID = "123456789-testclient.apps.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET = "GOCSPX-testclientsecret"
+    GOOGLE_REDIRECT_URI = "http://localhost:5000/api/auth/google/callback"
+
+
+class TestRateLimiting(unittest.TestCase):
+    """Regression tests verifying endpoint rate limiting enforcement."""
+
+    def setUp(self):
+        self.app = create_app(RateLimitTestConfig)
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+
+    def test_auth_login_rate_limiting_enforced(self):
+        """POST /api/auth/login must throttle after 5 requests per minute with HTTP 429."""
+        responses = []
+        for _ in range(7):
+            res = self.client.post("/api/auth/login", json={
+                "email": "attacker@example.com",
+                "password": "wrongpassword"
+            })
+            responses.append(res.status_code)
+
+        # First 5 attempts should return 401 (invalid creds)
+        self.assertEqual(responses[:5], [401, 401, 401, 401, 401])
+        # 6th and 7th attempts must be rate limited with 429
+        self.assertEqual(responses[5], 429)
+        self.assertEqual(responses[6], 429)
+
+        # Verify 429 response structure
+        last_res = self.client.post("/api/auth/login", json={
+            "email": "attacker@example.com",
+            "password": "wrongpassword"
+        })
+        self.assertEqual(last_res.status_code, 429)
+        data = last_res.get_json()
+        self.assertEqual(data.get("error"), "Too Many Requests")
+        self.assertIn("Rate limit exceeded", data.get("message", ""))
+
+    def test_auth_register_rate_limiting_enforced(self):
+        """POST /api/auth/register must throttle after 5 requests per minute with HTTP 429."""
+        responses = []
+        for i in range(7):
+            res = self.client.post("/api/auth/register", json={
+                "email": f"user{i}@example.com",
+                "password": "password123",
+                "name": f"User {i}"
+            })
+            responses.append(res.status_code)
+
+        # 6th and 7th attempts must be rate limited with 429
+        self.assertIn(429, responses)
+        self.assertEqual(responses[5], 429)
+        self.assertEqual(responses[6], 429)
+
+    def test_rate_limiting_disabled_in_standard_testing_mode(self):
+        """Standard test config (TESTING=True, RATELIMIT_ENABLED not explicitly set) must not throttle."""
+        default_test_app = create_app(TestSecurityConfig)
+        client = default_test_app.test_client()
+
+        statuses = []
+        for _ in range(12):
+            res = client.post("/api/auth/login", json={"email": "nobody@example.com", "password": "x"})
+            statuses.append(res.status_code)
+
+        # All requests should return 401 (not 429)
+        self.assertTrue(all(s == 401 for s in statuses))
+
+

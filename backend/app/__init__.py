@@ -18,7 +18,7 @@ from flask import Flask, request, g, jsonify
 import sqlalchemy as sa
 
 from app.config import Config, validate_production_config
-from app.extensions import db, migrate, cors
+from app.extensions import db, migrate, cors, limiter
 from app.routes import register_blueprints
 
 
@@ -53,6 +53,23 @@ def create_app(config_class: type = Config) -> Flask:
     # ── Extensions ──────────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db, render_as_batch=True)
+
+    # ── Rate Limiting Configuration ──────────────────────────
+    redis_url = app.config.get("REDIS_URL") or os.getenv("REDIS_URL")
+    if redis_url:
+        app.config.setdefault("RATELIMIT_STORAGE_URI", redis_url)
+    else:
+        app.config.setdefault("RATELIMIT_STORAGE_URI", "memory://")
+        if app.config.get("ENV") == "production":
+            app.logger.warning(
+                "Flask-Limiter running with in-memory storage in production. Configure REDIS_URL for multi-worker deployments."
+            )
+
+    app.config.setdefault("RATELIMIT_DEFAULT", ["200 per day", "50 per hour"])
+    if "RATELIMIT_ENABLED" not in app.config:
+        app.config["RATELIMIT_ENABLED"] = not app.config.get("TESTING", False)
+
+    limiter.init_app(app)
 
     allowed_origins = [
         "http://localhost:3000",
@@ -125,6 +142,14 @@ def create_app(config_class: type = Config) -> Flask:
             "message": "The requested resource was not found",
             "request_id": getattr(g, "request_id", None)
         }), 404
+
+    @app.errorhandler(429)
+    def handle_rate_limit(err):
+        return jsonify({
+            "error": "Too Many Requests",
+            "message": "Rate limit exceeded. Please try again later.",
+            "request_id": getattr(g, "request_id", None)
+        }), 429
 
     @app.errorhandler(500)
     def handle_internal_error(err):
