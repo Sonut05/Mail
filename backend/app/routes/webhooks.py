@@ -32,5 +32,6 @@ def gmail_push_notification():
 
     except Exception as exc:
         current_app.logger.error("Webhook error: %s", exc)
+        from app.utils.security import safe_error_message
         # Always return 200 so Pub/Sub doesn't retry endlessly.
-        return jsonify({"status": "error", "detail": str(exc)}), 200
+        return jsonify({"status": "error", "detail": safe_error_message(exc, "Webhook processing error")}), 200

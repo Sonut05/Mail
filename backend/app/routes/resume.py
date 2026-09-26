@@ -21,7 +21,7 @@ except Exception:
 
 import io
 from app.utils.auth import login_required, validate_session
-from app.utils.security import validate_pdf_upload
+from app.utils.security import validate_pdf_upload, safe_error_message
 
 resume_bp = Blueprint("resume", __name__, url_prefix="/api/resume")
 
@@ -167,7 +167,7 @@ def save_profile():
     except Exception as exc:
         current_app.logger.error("Error saving profile: %s", exc)
         db.session.rollback()
-        return jsonify({"error": f"Failed to save profile: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Failed to save profile")}), 500
 
 
 @resume_bp.route("/profiles/<profile_id>", methods=["DELETE"])
@@ -269,4 +269,4 @@ def auto_fill_form():
         return jsonify({"autofill": autofill_result}), 200
     except Exception as exc:
         current_app.logger.error("Auto-fill generation failed: %s", exc)
-        return jsonify({"error": f"Failed to generate auto-fill fields: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Failed to generate auto-fill fields")}), 500

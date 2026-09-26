@@ -217,7 +217,8 @@ def create_event():
     except Exception as exc:
         current_app.logger.error("Error creating calendar event: %s", exc)
         db.session.rollback()
-        return jsonify({"error": f"Failed to create calendar event: {str(exc)}"}), 500
+        from app.utils.security import safe_error_message
+        return jsonify({"error": safe_error_message(exc, "Failed to create calendar event")}), 500
 
 
 @calendar_bp.route("/<string:event_id>", methods=["GET"])
@@ -337,7 +338,8 @@ def update_event(event_id: str):
     except Exception as exc:
         current_app.logger.error("Error updating calendar event %s: %s", event_id, exc)
         db.session.rollback()
-        return jsonify({"error": f"Failed to update calendar event: {str(exc)}"}), 500
+        from app.utils.security import safe_error_message
+        return jsonify({"error": safe_error_message(exc, "Failed to update calendar event")}), 500
 
 
 @calendar_bp.route("/<string:event_id>", methods=["DELETE"])

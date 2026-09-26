@@ -161,6 +161,19 @@ def create_app(config_class: type = Config) -> Flask:
             "request_id": req_id
         }), 500
 
+    @app.errorhandler(Exception)
+    def handle_unhandled_exception(err):
+        from werkzeug.exceptions import HTTPException
+        if isinstance(err, HTTPException):
+            return err
+        req_id = getattr(g, "request_id", "unknown")
+        app.logger.error("Unhandled Exception [%s]: %s", req_id, err, exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": "An unexpected error occurred. Please contact support.",
+            "request_id": req_id
+        }), 500
+
     # ── Health-check & Readiness Endpoints (Requirement 4) ──
     @app.route("/health")
     @app.route("/api/health")

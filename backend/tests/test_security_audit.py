@@ -665,4 +665,55 @@ class TestInputValidationAndInjectionDefense(unittest.TestCase):
         self.assertIn("Invalid field", res.get_json()["error"])
 
 
+class TestErrorHandlingAndInfoLeakage(unittest.TestCase):
+    """Tests for Step 7: Error sanitization and stack trace prevention in production."""
+
+    def test_safe_error_message_strips_internal_details_in_production(self):
+        """safe_error_message must return generic fallback in production, stripping raw exception."""
+        from app.utils.security import safe_error_message
+
+        class ProdConfig(TestSecurityConfig):
+            DEBUG = False
+            SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+
+        app = create_app(ProdConfig)
+        with app.app_context():
+            leaky_exc = Exception("psycopg2.OperationalError: password authentication failed for user 'postgres' at /var/secret/db.py:42")
+            result = safe_error_message(leaky_exc, "Database operation failed")
+
+            # Must NOT contain internal details
+            self.assertEqual(result, "Database operation failed")
+            self.assertNotIn("password", result)
+            self.assertNotIn("postgres", result)
+            self.assertNotIn("/var/secret", result)
+
+    def test_unhandled_exception_returns_json_not_html_traceback(self):
+        """Unhandled exceptions must return 500 JSON with request_id and no raw stack trace."""
+        class ProdConfig(TestSecurityConfig):
+            DEBUG = False
+            SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+
+        app = create_app(ProdConfig)
+
+        # Register a route that raises an unhandled exception
+        @app.route("/api/test-crash")
+        def crash_route():
+            raise RuntimeError("Secret internal system failure with sensitive paths: C:\\secrets\\keys.pem")
+
+        client = app.test_client()
+        res = client.get("/api/test-crash")
+
+        self.assertEqual(res.status_code, 500)
+        self.assertTrue(res.is_json)
+        data = res.get_json()
+
+        self.assertEqual(data.get("error"), "Internal server error")
+        self.assertEqual(data.get("message"), "An unexpected error occurred. Please contact support.")
+        self.assertIn("request_id", data)
+        self.assertIsNotNone(data["request_id"])
+        self.assertNotIn("C:\\secrets", str(res.data))
+        self.assertNotIn("Traceback", str(res.data))
+
+
+
 

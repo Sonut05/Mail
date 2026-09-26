@@ -258,7 +258,8 @@ def create_task():
     except Exception as exc:
         current_app.logger.error("Error creating task: %s", exc)
         db.session.rollback()
-        return jsonify({"error": f"Failed to create task: {str(exc)}"}), 500
+        from app.utils.security import safe_error_message
+        return jsonify({"error": safe_error_message(exc, "Failed to create task")}), 500
 
 
 @tasks_bp.route("/<string:task_id>", methods=["GET"])

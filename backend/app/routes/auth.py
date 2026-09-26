@@ -30,6 +30,7 @@ from app.services.auth_security import (
     record_failed_login,
     record_successful_login,
 )
+from app.utils.security import safe_error_message
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -179,7 +180,7 @@ def google_login():
         return redirect(authorization_url)
     except Exception as exc:
         current_app.logger.error("Failed to build Google OAuth flow: %s", exc)
-        return jsonify({"error": f"Failed to initiate OAuth flow: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Failed to initiate OAuth flow")}), 500
 
 
 @auth_bp.route("/google/callback", methods=["GET"])
@@ -329,7 +330,9 @@ def google_callback():
         err_msg = str(exc)
         if "invalid_grant" in err_msg.lower():
             err_msg = "Google authorization code has expired or was already used. Please start sign-in again from the login page."
-        return jsonify({"error": f"OAuth callback failed: {err_msg}"}), 500
+        else:
+            err_msg = safe_error_message(exc, "Authentication failed. Please try again.")
+        return jsonify({"error": err_msg}), 500
 
 
 
@@ -400,7 +403,7 @@ def register():
     except Exception as exc:
         current_app.logger.error("Registration error: %s", exc)
         db.session.rollback()
-        return jsonify({"error": f"Registration failed: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Registration failed")}), 500
 
 
 @auth_bp.route("/login", methods=["POST"])
@@ -437,5 +440,5 @@ def login():
 
     except Exception as exc:
         current_app.logger.error("Login error: %s", exc)
-        return jsonify({"error": f"Login failed: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Login failed")}), 500
 

@@ -34,6 +34,7 @@ from app.services.job_queue_service import (
 
 from app.utils.auth import login_required, validate_session
 from app.schemas import validate_schema, GenerateReplyPayload, AnalyzeBatchPayload
+from app.utils.security import safe_error_message
 
 emails_bp = Blueprint("emails", __name__, url_prefix="/api/emails")
 
@@ -523,7 +524,7 @@ def analyze_emails_batch():
 
     except Exception as exc:
         current_app.logger.error("Error in batch email analysis: %s", exc)
-        return jsonify({"error": f"Batch analysis failed: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Batch analysis failed")}), 500
 
 
 
@@ -830,7 +831,7 @@ def approve_reply(email_id: str):
     except Exception as exc:
         current_app.logger.error("Error approving reply for %s: %s", email_id, exc)
         db.session.rollback()
-        return jsonify({"error": f"Failed to send reply: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Failed to send reply")}), 500
 
 
 @emails_bp.route("/<string:email_id>/discard", methods=["POST"])
@@ -1382,7 +1383,7 @@ def sync_emails():
     except Exception as exc:
         current_app.logger.error("Email sync error: %s", exc)
         db.session.rollback()
-        return jsonify({"error": f"Sync failed: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Sync failed")}), 500
 
 
 @emails_bp.route("/generate-reply", methods=["POST"])
@@ -1411,4 +1412,4 @@ def generate_reply_standalone():
 
     except Exception as exc:
         current_app.logger.error("Standalone reply generation failed: %s", exc)
-        return jsonify({"error": f"Failed to generate reply: {str(exc)}"}), 500
+        return jsonify({"error": safe_error_message(exc, "Failed to generate reply")}), 500

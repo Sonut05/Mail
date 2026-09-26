@@ -177,3 +177,17 @@ def validate_safe_filepath(base_directory: str, filename_or_path: str) -> tuple[
         return False, "Path traversal attempt detected."
 
     return True, target_abs
+
+
+def safe_error_message(exc: Exception, fallback: str) -> str:
+    """Return a generic fallback message if in production or debug is False, preventing internal info leakage."""
+    try:
+        from flask import current_app
+        is_prod = current_app.config.get("ENV") == "production"
+        is_debug = current_app.config.get("DEBUG", False)
+        if is_prod or not is_debug:
+            return fallback
+    except Exception:
+        pass
+    return f"{fallback}: {str(exc)}" if str(exc) else fallback
+
