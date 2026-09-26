@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.2",
     "lucide-react": "^0.460.0",
     "mailmind-ai-root": "file:..",
     "motion": "^12.42.2",
