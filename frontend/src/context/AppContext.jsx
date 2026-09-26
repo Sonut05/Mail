@@ -301,6 +301,13 @@ export function AppProvider({ children }) {
       }
     }
     initAuth();
+
+    const handleUnauthorized = () => {
+      setUser(null);
+      setDemoMode(false);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
   // Update saved accounts list whenever user changes

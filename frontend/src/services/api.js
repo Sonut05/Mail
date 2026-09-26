@@ -14,6 +14,10 @@ async function request(endpoint, options = {}) {
     });
 
     if (response.status === 401) {
+      // Dispatches a global event for immediate redirection to Login screen
+      if (typeof window !== 'undefined' && !endpoint.includes('/auth/me')) {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
       // Return a structured unauthorized object instead of throwing
       return { unauthorized: true };
     }
