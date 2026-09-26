@@ -32,6 +32,8 @@ from app.services.job_queue_service import (
     process_claimed_job,
 )
 
+from app.utils.auth import login_required, validate_session
+
 emails_bp = Blueprint("emails", __name__, url_prefix="/api/emails")
 
 
@@ -49,10 +51,7 @@ def _get_current_user() -> Optional[User]:
 
 def _require_auth():
     """Return (user, None) or (None, error_response)."""
-    user = _get_current_user()
-    if not user:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    return user, None
+    return validate_session()
 
 
 # ──────────────────────────────────────────────────────────────
@@ -60,6 +59,7 @@ def _require_auth():
 # ──────────────────────────────────────────────────────────────
 
 @emails_bp.route("", methods=["GET"])
+@login_required
 def list_emails():
     """List all processed emails for the current user.
 
@@ -115,6 +115,7 @@ def list_emails():
 
 
 @emails_bp.route("/smart-inbox", methods=["GET"])
+@login_required
 def get_smart_inbox():
     """Derive personalized Smart Inbox views for the authenticated user with explainable ranking.
 
@@ -278,6 +279,7 @@ def get_smart_inbox():
 
 
 @emails_bp.route("/search", methods=["GET"])
+@login_required
 def search_emails():
     """Advanced search across emails with AST query parsing and parameterized filtering.
 
@@ -329,6 +331,7 @@ def search_emails():
 
 
 @emails_bp.route("/contacts/insights", methods=["GET"])
+@login_required
 def get_contact_insights():
     """Derive contact intelligence from user's email metadata without Google Contacts permissions."""
     user, err = _require_auth()
@@ -386,6 +389,7 @@ def get_contact_insights():
 
 
 @emails_bp.route("/analyze", methods=["POST"])
+@login_required
 def analyze_emails_batch():
     """Batch analyze emails for the authenticated user.
 
@@ -522,6 +526,7 @@ def analyze_emails_batch():
 
 
 @emails_bp.route("/<string:email_id>", methods=["GET"])
+@login_required
 def get_email(email_id: str):
     """Get a single email with all related entities, tasks, events, and reminders."""
     user, err = _require_auth()
@@ -544,6 +549,7 @@ def get_email(email_id: str):
 
 
 @emails_bp.route("/<string:email_id>/retry", methods=["POST"])
+@login_required
 def retry_single_email_analysis(email_id: str):
     """Retry AI analysis for an email up to MAX_RETRIES (3)."""
     user, err = _require_auth()
@@ -608,6 +614,7 @@ def retry_single_email_analysis(email_id: str):
 
 
 @emails_bp.route("/<string:email_id>/analyze", methods=["POST"])
+@login_required
 def analyze_single_email(email_id: str):
     """Analyze a single email with AI and store intelligence results.
 
@@ -764,6 +771,7 @@ def analyze_single_email(email_id: str):
 
 
 @emails_bp.route("/<string:email_id>/approve", methods=["POST"])
+@login_required
 def approve_reply(email_id: str):
     """Approve and send the AI-drafted reply for an email.
 
@@ -822,6 +830,7 @@ def approve_reply(email_id: str):
 
 
 @emails_bp.route("/<string:email_id>/discard", methods=["POST"])
+@login_required
 def discard_reply(email_id: str):
     """Discard the AI-drafted reply.
 
@@ -858,6 +867,7 @@ def discard_reply(email_id: str):
 
 
 @emails_bp.route("/<string:email_id>/read", methods=["POST"])
+@login_required
 def mark_email_read(email_id: str):
     """Mark an email as read (reviewed)."""
     user, err = _require_auth()
@@ -885,6 +895,7 @@ def mark_email_read(email_id: str):
 
 
 @emails_bp.route("/sync", methods=["POST"])
+@login_required
 def sync_emails():
     """Manually trigger an email sync from Gmail.
 
@@ -1371,6 +1382,7 @@ def sync_emails():
 
 
 @emails_bp.route("/generate-reply", methods=["POST"])
+@login_required
 def generate_reply_standalone():
     """Generate a reply to an email body without a connected mailbox."""
     try:

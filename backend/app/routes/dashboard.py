@@ -14,22 +14,18 @@ from app.models import User, EmailMessage, Task, CalendarEvent, AIAnalysisJob
 from app.services.thread_service import get_stale_threads, get_threads_for_user
 from app.services.follow_up_service import get_follow_up_recommendations
 from app.services.contact_service import get_all_contacts_for_user
+from app.utils.auth import login_required, validate_session
 
 dashboard_bp = Blueprint("dashboard", __name__, url_prefix="/api/dashboard")
 
 
 def _require_auth():
     """Return (user, None) or (None, error_response)."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @dashboard_bp.route("/stats", methods=["GET"])
+@login_required
 def stats():
     """Return aggregated email, task, calendar, and AI statistics for the dashboard.
 

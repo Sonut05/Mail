@@ -9,21 +9,17 @@ from flask import Blueprint, jsonify, request, session
 from app.extensions import db
 from app.models.user import User
 from app.services.analytics_service import get_productivity_analytics
+from app.utils.auth import login_required, validate_session
 
 analytics_bp = Blueprint("analytics", __name__, url_prefix="/api/analytics")
 
 
 def _require_auth():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @analytics_bp.route("/productivity", methods=["GET"])
+@login_required
 def productivity_metrics():
     """GET /api/analytics/productivity?period=7d|30d|90d"""
     user, err = _require_auth()

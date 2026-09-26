@@ -17,21 +17,17 @@ from app.services.action_center_service import (
     complete_action,
 )
 from app.services.bulk_action_service import execute_bulk_action
+from app.utils.auth import login_required, validate_session
 
 actions_bp = Blueprint("actions", __name__, url_prefix="/api/actions")
 
 
 def _require_auth():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @actions_bp.route("", methods=["GET"])
+@login_required
 def list_actions():
     """GET /api/actions — List paginated Action Center items."""
     user, err = _require_auth()
@@ -67,6 +63,7 @@ def list_actions():
 
 
 @actions_bp.route("/<action_id>/snooze", methods=["POST"])
+@login_required
 def snooze_action_endpoint(action_id: str):
     """POST /api/actions/<id>/snooze — Snooze an action item."""
     user, err = _require_auth()
@@ -85,6 +82,7 @@ def snooze_action_endpoint(action_id: str):
 
 
 @actions_bp.route("/<action_id>/dismiss", methods=["POST"])
+@login_required
 def dismiss_action_endpoint(action_id: str):
     """POST /api/actions/<id>/dismiss — Dismiss an action item."""
     user, err = _require_auth()
@@ -99,6 +97,7 @@ def dismiss_action_endpoint(action_id: str):
 
 
 @actions_bp.route("/<action_id>/complete", methods=["POST"])
+@login_required
 def complete_action_endpoint(action_id: str):
     """POST /api/actions/<id>/complete — Mark an action item complete."""
     user, err = _require_auth()
@@ -113,6 +112,7 @@ def complete_action_endpoint(action_id: str):
 
 
 @actions_bp.route("/bulk", methods=["POST"])
+@login_required
 def bulk_action_endpoint():
     """POST /api/actions/bulk — Execute bulk action across selected items."""
     user, err = _require_auth()
@@ -144,6 +144,7 @@ def bulk_action_endpoint():
 
 
 @actions_bp.route("/<action_id>", methods=["GET"])
+@login_required
 def get_action_endpoint(action_id: str):
     """GET /api/actions/<id> — Get a single action item with ownership check."""
     user, err = _require_auth()
@@ -160,6 +161,7 @@ def get_action_endpoint(action_id: str):
 
 
 @actions_bp.route("/<action_id>", methods=["PATCH", "PUT"])
+@login_required
 def update_action_endpoint(action_id: str):
     """PATCH /api/actions/<id> — Update action item priority/title with ownership check."""
     user, err = _require_auth()
@@ -183,6 +185,7 @@ def update_action_endpoint(action_id: str):
 
 
 @actions_bp.route("/<action_id>", methods=["DELETE"])
+@login_required
 def delete_action_endpoint(action_id: str):
     """DELETE /api/actions/<id> — Delete an action item with ownership check."""
     user, err = _require_auth()

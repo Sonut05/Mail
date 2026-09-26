@@ -23,6 +23,7 @@ from app.extensions import db
 from app.models.user import User
 from app.models.connected_email_account import ConnectedEmailAccount
 from app.services.encryption import encrypt_token, decrypt_token
+from app.utils.auth import login_required, rotate_session
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -121,7 +122,7 @@ def google_login():
 
             user.name = user.name or "Demo Developer"
             user.picture = user.picture or "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80"
-            session["user_id"] = user.id
+            rotate_session(user.id)
 
             connected_acc = ConnectedEmailAccount.query.filter_by(
                 user_id=user.id,
@@ -263,8 +264,8 @@ def google_callback():
         if not user:
             return jsonify({"error": "Could not identify or create MailMild user."}), 500
 
-        # Maintain active session
-        session["user_id"] = user.id
+        # Maintain active session with session rotation
+        rotate_session(user.id)
 
         # 5. Encrypt tokens before writing to database (NEVER store plaintext)
         enc_access = encrypt_token(access_token)
@@ -326,17 +327,15 @@ def google_callback():
 
 
 @auth_bp.route("/me", methods=["GET"])
+@login_required
 def me():
     """Return the currently authenticated user's profile.
 
     Returns:
         200 with user info, or 401 if not authenticated.
     """
-    user_id = session.get("user_id")
-    if not user_id:
-        return jsonify({"error": "Not authenticated."}), 401
-
-    user = db.session.get(User, user_id)
+    from flask import g
+    user = getattr(g, "current_user", None) or db.session.get(User, session.get("user_id"))
     if not user:
         session.clear()
         return jsonify({"error": "User not found."}), 401
@@ -380,8 +379,8 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        # Log user in by setting session
-        session["user_id"] = user.id
+        # Log user in by setting rotated session
+        rotate_session(user.id)
         return jsonify({"user": user.to_dict()}), 201
 
     except Exception as exc:
@@ -405,8 +404,8 @@ def login():
         if not user or user.provider != "local" or not user.check_password(password):
             return jsonify({"error": "Invalid email or password."}), 401
 
-        # Log user in by setting session
-        session["user_id"] = user.id
+        # Log user in by setting rotated session
+        rotate_session(user.id)
         return jsonify({"user": user.to_dict()}), 200
 
     except Exception as exc:

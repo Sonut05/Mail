@@ -18,21 +18,18 @@ from app.services.follow_up_service import (
 )
 from app.services.personalization_service import record_user_feedback_signal
 
+from app.utils.auth import login_required, validate_session
+
 threads_bp = Blueprint("threads", __name__, url_prefix="/api/threads")
 
 
 def _require_auth():
     """Verify session authentication and return User or 401 response."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @threads_bp.route("", methods=["GET"])
+@login_required
 def list_threads():
     """List conversation threads with pagination, status filters, and search query."""
     user, err = _require_auth()
@@ -59,6 +56,7 @@ def list_threads():
 
 
 @threads_bp.route("/<thread_id>", methods=["GET"])
+@login_required
 def thread_detail(thread_id: str):
     """Retrieve full chronological conversation thread with individual messages."""
     user, err = _require_auth()
@@ -76,6 +74,7 @@ def thread_detail(thread_id: str):
 
 
 @threads_bp.route("/follow-ups", methods=["GET"])
+@login_required
 def follow_ups():
     """Retrieve actionable follow-up recommendations (advisory only)."""
     user, err = _require_auth()
@@ -94,6 +93,7 @@ def follow_ups():
 
 
 @threads_bp.route("/stale", methods=["GET"])
+@login_required
 def stale_threads():
     """Retrieve stale conversations (no activity for >= 7 days with unresolved action)."""
     user, err = _require_auth()
@@ -112,6 +112,7 @@ def stale_threads():
 
 
 @threads_bp.route("/<thread_id>/dismiss-follow-up", methods=["POST"])
+@login_required
 def dismiss_follow_up(thread_id: str):
     """Dismiss a follow-up recommendation for this thread."""
     user, err = _require_auth()

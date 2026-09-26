@@ -12,22 +12,18 @@ from app.services.contact_service import (
     get_contacts_list,
     get_contact_detail,
 )
+from app.utils.auth import login_required, validate_session
 
 contacts_bp = Blueprint("contacts", __name__, url_prefix="/api/contacts")
 
 
 def _require_auth():
     """Verify session authentication and return User or 401 response."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @contacts_bp.route("", methods=["GET"])
+@login_required
 def list_contacts():
     """List paginated, sortable contacts for the authenticated user."""
     user, err = _require_auth()
@@ -54,6 +50,7 @@ def list_contacts():
 
 
 @contacts_bp.route("/<contact_email>", methods=["GET"])
+@login_required
 def contact_detail(contact_email: str):
     """Retrieve detailed contact overview, conversation statistics, and recent interactions."""
     user, err = _require_auth()

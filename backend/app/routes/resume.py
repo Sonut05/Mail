@@ -19,26 +19,24 @@ try:
 except Exception:
     pypdf = None
 
+from app.utils.auth import login_required, validate_session
+
 resume_bp = Blueprint("resume", __name__, url_prefix="/api/resume")
 
 
 def _get_current_user() -> User | None:
     """Retrieve the authenticated user from the session."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None
-    return db.session.get(User, user_id)
+    user, _ = validate_session()
+    return user
 
 
 def _require_auth():
     """Return (user, None) or (None, error_response)."""
-    user = _get_current_user()
-    if not user:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    return user, None
+    return validate_session()
 
 
 @resume_bp.route("/profiles", methods=["GET"])
+@login_required
 def get_profiles():
     """Retrieve user's list of resume autopilot profiles."""
     user, err = _require_auth()
@@ -59,6 +57,7 @@ def get_profiles():
 
 
 @resume_bp.route("/profiles", methods=["POST"])
+@login_required
 def save_profile():
     """Save (create or update) a resume autopilot profile."""
     user, err = _require_auth()
@@ -164,6 +163,7 @@ def save_profile():
 
 
 @resume_bp.route("/profiles/<profile_id>", methods=["DELETE"])
+@login_required
 def delete_profile(profile_id):
     """Delete a resume autopilot profile."""
     user, err = _require_auth()
@@ -192,6 +192,7 @@ def delete_profile(profile_id):
 
 
 @resume_bp.route("/auto-fill", methods=["POST"])
+@login_required
 def auto_fill_form():
     """Analyze recruitment email and populate form details mapping."""
     user, err = _require_auth()

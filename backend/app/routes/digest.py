@@ -10,21 +10,17 @@ from flask import Blueprint, jsonify, request, session
 from app.extensions import db
 from app.models.user import User
 from app.services.digest_service import generate_daily_digest
+from app.utils.auth import login_required, validate_session
 
 digest_bp = Blueprint("digest", __name__, url_prefix="/api/digest")
 
 
 def _require_auth():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @digest_bp.route("", methods=["GET"])
+@login_required
 def get_digest():
     """GET /api/digest — Return structured daily productivity digest."""
     user, err = _require_auth()

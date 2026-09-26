@@ -13,21 +13,18 @@ from sqlalchemy import func, case, and_, or_
 from app.extensions import db
 from app.models import User, Task, EmailMessage
 
+from app.utils.auth import login_required, validate_session
+
 tasks_bp = Blueprint("tasks", __name__, url_prefix="/api/tasks")
 
 
 def _require_auth():
     """Return (user, None) or (None, error_response)."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @tasks_bp.route("", methods=["GET"])
+@login_required
 def list_tasks():
     """List all tasks for the current authenticated user.
 
@@ -146,6 +143,7 @@ def list_tasks():
 
 
 @tasks_bp.route("", methods=["POST"])
+@login_required
 def create_task():
     """Create a task (either manual or linked to an email).
 
@@ -264,6 +262,7 @@ def create_task():
 
 
 @tasks_bp.route("/<string:task_id>", methods=["GET"])
+@login_required
 def get_task(task_id: str):
     """Get a task by ID along with its source email metadata."""
     user, err = _require_auth()
@@ -295,6 +294,7 @@ def get_task(task_id: str):
 
 
 @tasks_bp.route("/<string:task_id>", methods=["PUT", "PATCH"])
+@login_required
 def update_task(task_id: str):
     """Update a task's title, description, due_date, priority, or status."""
     user, err = _require_auth()
@@ -361,6 +361,7 @@ def update_task(task_id: str):
 
 
 @tasks_bp.route("/<string:task_id>/complete", methods=["POST"])
+@login_required
 def complete_task(task_id: str):
     """Mark a task as completed."""
     user, err = _require_auth()
@@ -390,6 +391,7 @@ def complete_task(task_id: str):
 
 
 @tasks_bp.route("/<string:task_id>/reopen", methods=["POST"])
+@login_required
 def reopen_task(task_id: str):
     """Reopen a completed task, setting status back to in_progress."""
     user, err = _require_auth()
@@ -419,6 +421,7 @@ def reopen_task(task_id: str):
 
 
 @tasks_bp.route("/<string:task_id>", methods=["DELETE"])
+@login_required
 def delete_task(task_id: str):
     """Delete a task. Never deletes the source email."""
     user, err = _require_auth()

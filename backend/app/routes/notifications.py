@@ -16,20 +16,17 @@ from app.services.notification_service import (
     dismiss_notification,
 )
 
+from app.utils.auth import login_required, validate_session
+
 notifications_bp = Blueprint("notifications", __name__, url_prefix="/api/notifications")
 
 
 def _require_auth():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @notifications_bp.route("", methods=["GET"])
+@login_required
 def list_notifications():
     """GET /api/notifications — List paginated notifications."""
     user, err = _require_auth()
@@ -48,6 +45,7 @@ def list_notifications():
 
 
 @notifications_bp.route("/unread-count", methods=["GET"])
+@login_required
 def get_unread_count():
     """GET /api/notifications/unread-count — Fast unread notification counter."""
     user, err = _require_auth()
@@ -65,6 +63,7 @@ def get_unread_count():
 
 
 @notifications_bp.route("/<notif_id>/read", methods=["POST"])
+@login_required
 def mark_read(notif_id: str):
     """POST /api/notifications/<id>/read — Mark notification read."""
     user, err = _require_auth()
@@ -79,6 +78,7 @@ def mark_read(notif_id: str):
 
 
 @notifications_bp.route("/read-all", methods=["POST"])
+@login_required
 def mark_all_read():
     """POST /api/notifications/read-all — Mark all notifications read."""
     user, err = _require_auth()
@@ -90,6 +90,7 @@ def mark_all_read():
 
 
 @notifications_bp.route("/<notif_id>/dismiss", methods=["POST"])
+@login_required
 def dismiss(notif_id: str):
     """POST /api/notifications/<id>/dismiss — Dismiss notification."""
     user, err = _require_auth()
@@ -104,6 +105,7 @@ def dismiss(notif_id: str):
 
 
 @notifications_bp.route("/<notif_id>", methods=["GET"])
+@login_required
 def get_notification_endpoint(notif_id: str):
     """GET /api/notifications/<id> — Retrieve a single notification with ownership check."""
     user, err = _require_auth()
@@ -120,6 +122,7 @@ def get_notification_endpoint(notif_id: str):
 
 
 @notifications_bp.route("/<notif_id>", methods=["DELETE"])
+@login_required
 def delete_notification_endpoint(notif_id: str):
     """DELETE /api/notifications/<id> — Delete a single notification with ownership check."""
     user, err = _require_auth()

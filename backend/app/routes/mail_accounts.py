@@ -20,17 +20,18 @@ from app.services.sync_service import (
     start_background_incremental_sync,
 )
 
+from app.utils.auth import login_required, validate_session
+
 mail_bp = Blueprint("mail", __name__, url_prefix="/api/mail")
 
 
 def _get_current_user():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None
-    return db.session.get(User, user_id)
+    user, _ = validate_session()
+    return user
 
 
 @mail_bp.route("/accounts", methods=["GET"])
+@login_required
 def get_connected_accounts():
     """Retrieve all connected email accounts for the authenticated MailMild user.
     
@@ -53,6 +54,7 @@ def get_connected_accounts():
 
 
 @mail_bp.route("/disconnect", methods=["POST"])
+@login_required
 def disconnect_account():
     """Disconnect a connected email account.
     
@@ -110,6 +112,7 @@ def disconnect_account():
 
 
 @mail_bp.route("/sync", methods=["POST"])
+@login_required
 def trigger_sync():
     """Trigger synchronization for a connected Gmail account.
 
@@ -176,6 +179,7 @@ def trigger_sync():
 
 
 @mail_bp.route("/sync/incremental", methods=["POST"])
+@login_required
 def trigger_incremental_sync():
     """Trigger incremental mailbox synchronization using Gmail historyId.
 
@@ -246,6 +250,7 @@ def trigger_incremental_sync():
 
 
 @mail_bp.route("/sync-status", methods=["GET"])
+@login_required
 def get_sync_status():
     """Retrieve synchronization progress and status for a connected email account.
 

@@ -15,21 +15,18 @@ from app.services.personalization_service import (
     get_user_signals_map,
 )
 
+from app.utils.auth import login_required, validate_session
+
 preferences_bp = Blueprint("preferences", __name__, url_prefix="/api/preferences")
 
 
 def _require_auth():
     """Verify session authentication and return User or 401 response."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @preferences_bp.route("", methods=["GET"])
+@login_required
 def get_preferences():
     """Retrieve the current user's intelligence and personalization preferences."""
     user, err = _require_auth()
@@ -48,6 +45,7 @@ def get_preferences():
 
 
 @preferences_bp.route("", methods=["PUT"])
+@login_required
 def update_preferences():
     """Update user preferences with strict type and boundary validation."""
     user, err = _require_auth()
@@ -70,6 +68,7 @@ def update_preferences():
 
 
 @preferences_bp.route("/signals", methods=["POST"])
+@login_required
 def add_signal():
     """Record a user feedback signal (e.g., mark important, dismiss suggestion, category override)."""
     user, err = _require_auth()
@@ -119,6 +118,7 @@ def add_signal():
 
 
 @preferences_bp.route("/ai-data", methods=["DELETE"])
+@login_required
 def clear_ai_data():
     """Controlled privacy mechanism: clears only AI-derived data for the current user.
 

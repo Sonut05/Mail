@@ -65,3 +65,98 @@ class TestAuthBackdoorFix(unittest.TestCase):
         self.assertEqual(res.status_code, 302)
         with self.client.session_transaction() as sess:
             self.assertIsNotNone(sess.get("user_id"))
+
+
+class TestAuthenticationAudit(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app(TestSecurityConfig)
+        self.client = self.app.test_client()
+        with self.app.app_context():
+            db.create_all()
+            user = User(email="authaudit@mailmind.io", name="Auth Audit", provider="local")
+            user.set_password("SecurePassword123!")
+            db.session.add(user)
+            db.session.commit()
+            self.user_id = user.id
+
+    def tearDown(self):
+        with self.app.app_context():
+            db.session.remove()
+            db.drop_all()
+
+    def test_unauthenticated_endpoints_return_401(self):
+        """All private endpoints reject unauthenticated access with 401."""
+        endpoints = [
+            ("GET", "/api/auth/me"),
+            ("GET", "/api/emails"),
+            ("POST", "/api/emails/generate-reply"),
+            ("GET", "/api/tasks"),
+            ("GET", "/api/calendar"),
+            ("GET", "/api/dashboard/stats"),
+            ("GET", "/api/preferences"),
+            ("GET", "/api/notifications"),
+            ("GET", "/api/resume/profiles"),
+            ("GET", "/api/mail/accounts"),
+            ("GET", "/api/searches"),
+            ("GET", "/api/threads"),
+            ("GET", "/api/contacts"),
+            ("GET", "/api/actions"),
+            ("GET", "/api/digest"),
+            ("GET", "/api/analytics/productivity"),
+        ]
+        for method, url in endpoints:
+            if method == "GET":
+                res = self.client.get(url)
+            else:
+                res = self.client.post(url, json={"email_body": "test"})
+            self.assertEqual(res.status_code, 401, f"{method} {url} did not return 401")
+
+    def test_session_rotation_on_login_and_register(self):
+        """Session is rotated (cleared + reissued) on login and registration."""
+        with self.client.session_transaction() as sess:
+            sess["old_preauth_data"] = "attacker_session_fixation_payload"
+
+        res = self.client.post("/api/auth/login", json={
+            "email": "authaudit@mailmind.io",
+            "password": "SecurePassword123!"
+        })
+        self.assertEqual(res.status_code, 200)
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess.get("user_id"), self.user_id)
+            self.assertNotIn("old_preauth_data", sess)
+            self.assertIn("_auth_created_at", sess)
+            self.assertIn("_auth_last_active", sess)
+
+    def test_session_idle_timeout(self):
+        """Session expires when idle timeout (e.g. 24h) is exceeded."""
+        import time
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = self.user_id
+            sess["_auth_created_at"] = time.time() - 3600
+            # Last active 25 hours ago (timeout is 24h)
+            sess["_auth_last_active"] = time.time() - (25 * 3600)
+
+        res = self.client.get("/api/auth/me")
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("inactivity", res.get_json().get("error", "").lower())
+
+        with self.client.session_transaction() as sess:
+            self.assertIsNone(sess.get("user_id"))
+
+    def test_session_absolute_expiry(self):
+        """Session expires when absolute expiry (e.g. 7 days) is exceeded even if actively used."""
+        import time
+        with self.client.session_transaction() as sess:
+            sess["user_id"] = self.user_id
+            # Created 8 days ago (absolute expiry is 7 days)
+            sess["_auth_created_at"] = time.time() - (8 * 86400)
+            sess["_auth_last_active"] = time.time() - 100
+
+        res = self.client.get("/api/auth/me")
+        self.assertEqual(res.status_code, 401)
+        self.assertIn("expired", res.get_json().get("error", "").lower())
+
+        with self.client.session_transaction() as sess:
+            self.assertIsNone(sess.get("user_id"))
+

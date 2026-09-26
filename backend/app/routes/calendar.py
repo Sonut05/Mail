@@ -13,18 +13,14 @@ from sqlalchemy import and_, or_
 from app.extensions import db
 from app.models import User, CalendarEvent, EmailMessage
 
+from app.utils.auth import login_required, validate_session
+
 calendar_bp = Blueprint("calendar", __name__, url_prefix="/api/calendar")
 
 
 def _require_auth():
     """Return (user, None) or (None, error_response)."""
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 def _parse_dt(val) -> datetime | None:
@@ -72,6 +68,7 @@ def _find_conflicts(user_id: str, start_dt: datetime, end_dt: datetime, exclude_
 
 
 @calendar_bp.route("", methods=["GET"])
+@login_required
 def list_events():
     """List all calendar events for the current authenticated user.
 
@@ -98,6 +95,7 @@ def list_events():
 
 
 @calendar_bp.route("/check-conflict", methods=["POST"])
+@login_required
 def check_conflict_endpoint():
     """Check whether a proposed start/end time conflicts with existing calendar events.
     Canonical overlap logic: start < existing.end AND end > existing.start
@@ -131,6 +129,7 @@ def check_conflict_endpoint():
 
 
 @calendar_bp.route("", methods=["POST"])
+@login_required
 def create_event():
     """Create a calendar event (manual or linked to an email).
 
@@ -222,6 +221,7 @@ def create_event():
 
 
 @calendar_bp.route("/<string:event_id>", methods=["GET"])
+@login_required
 def get_event(event_id: str):
     """Get a single calendar event by ID along with its source email metadata."""
     user, err = _require_auth()
@@ -253,6 +253,7 @@ def get_event(event_id: str):
 
 
 @calendar_bp.route("/<string:event_id>", methods=["PUT", "PATCH"])
+@login_required
 def update_event(event_id: str):
     """Update a calendar event with conflict detection and end > start validation."""
     user, err = _require_auth()
@@ -340,6 +341,7 @@ def update_event(event_id: str):
 
 
 @calendar_bp.route("/<string:event_id>", methods=["DELETE"])
+@login_required
 def delete_event(event_id: str):
     """Delete a calendar event. Source email is never deleted."""
     user, err = _require_auth()

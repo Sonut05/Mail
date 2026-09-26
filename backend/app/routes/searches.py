@@ -10,20 +10,17 @@ from app.extensions import db
 from app.models.user import User
 from app.models.saved_search import SavedSearch
 
+from app.utils.auth import login_required, validate_session
+
 searches_bp = Blueprint("searches", __name__, url_prefix="/api/searches")
 
 
 def _require_auth():
-    user_id = session.get("user_id")
-    if not user_id:
-        return None, (jsonify({"error": "Authentication required."}), 401)
-    user = db.session.get(User, user_id)
-    if not user:
-        return None, (jsonify({"error": "User not found."}), 401)
-    return user, None
+    return validate_session()
 
 
 @searches_bp.route("", methods=["GET"])
+@login_required
 def list_searches():
     """GET /api/searches — List all saved searches for the authenticated user."""
     user, err = _require_auth()
@@ -35,6 +32,7 @@ def list_searches():
 
 
 @searches_bp.route("", methods=["POST"])
+@login_required
 def create_saved_search():
     """POST /api/searches — Create a new saved search."""
     user, err = _require_auth()
@@ -65,6 +63,7 @@ def create_saved_search():
 
 
 @searches_bp.route("/<search_id>", methods=["GET"])
+@login_required
 def get_saved_search(search_id: str):
     """GET /api/searches/<id> — Retrieve specific saved search."""
     user, err = _require_auth()
@@ -78,6 +77,7 @@ def get_saved_search(search_id: str):
 
 
 @searches_bp.route("/<search_id>", methods=["PUT"])
+@login_required
 def update_saved_search(search_id: str):
     """PUT /api/searches/<id> — Update saved search."""
     user, err = _require_auth()
@@ -115,6 +115,7 @@ def update_saved_search(search_id: str):
 
 
 @searches_bp.route("/<search_id>", methods=["DELETE"])
+@login_required
 def delete_saved_search(search_id: str):
     """DELETE /api/searches/<id> — Delete saved search."""
     user, err = _require_auth()
