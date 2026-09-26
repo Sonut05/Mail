@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import uuid
+import secrets
 import logging
 from datetime import datetime, timezone
 
@@ -97,33 +98,38 @@ def create_app(config_class: type = Config) -> Flask:
             except Exception as exc:
                 app.logger.warning("db.create_all encountered an issue (tables likely exist): %s", exc)
 
-    # ── Correlation ID and Structured Logging Middleware ───
+    # ── Correlation ID, CSP Nonce, and Structured Logging Middleware ───
     @app.before_request
-    def before_request_correlation():
+    def before_request_security_setup():
         req_id = request.headers.get("X-Request-ID") or request.headers.get("X-Correlation-ID")
         if not req_id:
             req_id = f"req-{uuid.uuid4().hex[:12]}"
         g.request_id = req_id
+        g.csp_nonce = secrets.token_urlsafe(16)
 
     @app.after_request
     def after_request_security_and_correlation(response):
         if hasattr(g, "request_id"):
             response.headers["X-Request-ID"] = g.request_id
         # Production security headers
+        response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        nonce = getattr(g, "csp_nonce", "")
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
+            f"script-src 'self' 'nonce-{nonce}' 'unsafe-inline'; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com data:; "
             "img-src 'self' data: https:; "
             "connect-src 'self' http://localhost:* ws://localhost:* https://*.googleapis.com; "
-            "frame-ancestors 'self';"
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self';"
         )
-        if request.is_secure:
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        if request.is_secure or app.config.get("ENV") == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
         return response
 
     # ── Standardized Safe Error Handlers ───────────────────

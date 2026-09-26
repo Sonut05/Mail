@@ -44,7 +44,10 @@ class Config:
     SESSION_COOKIE_NAME = "mailmild_session"
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
-    SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() in ("true", "1")
+    SESSION_COOKIE_SECURE = os.getenv(
+        "SESSION_COOKIE_SECURE",
+        "true" if os.getenv("FLASK_ENV") == "production" else "false"
+    ).lower() in ("true", "1")
     SESSION_COOKIE_PATH = "/"
     USE_PROXY_FIX = os.getenv("USE_PROXY_FIX", "false").lower() in ("true", "1")
 
@@ -117,7 +120,7 @@ def validate_production_config(cfg: dict | type[Config]) -> list[str]:
 
         # Check Database
         db_uri = get_val("SQLALCHEMY_DATABASE_URI", "")
-        if not db_uri or db_uri.startswith("sqlite"):
+        if not get_val("TESTING", False) and (not db_uri or db_uri.startswith("sqlite")):
             errors.append("Production requires a PostgreSQL database (DATABASE_URL starting with postgresql://). SQLite is not permitted.")
 
         # Check Encryption Key

@@ -715,5 +715,93 @@ class TestErrorHandlingAndInfoLeakage(unittest.TestCase):
         self.assertNotIn("Traceback", str(res.data))
 
 
+class TestSecurityHeadersAndTransportAudit(unittest.TestCase):
+    def setUp(self):
+        self.app = create_app(TestSecurityConfig)
+        self.client = self.app.test_client()
+
+    def test_security_headers_present_on_all_responses(self):
+        """Responses must include X-Frame-Options, X-Content-Type-Options, Permissions-Policy, Referrer-Policy, and CSP."""
+        res = self.client.get("/api/health")
+        self.assertEqual(res.status_code, 200)
+
+        # X-Frame-Options: DENY (clickjacking defense)
+        self.assertEqual(res.headers.get("X-Frame-Options"), "DENY")
+
+        # X-Content-Type-Options: nosniff (MIME sniffing defense)
+        self.assertEqual(res.headers.get("X-Content-Type-Options"), "nosniff")
+
+        # Permissions-Policy
+        self.assertEqual(
+            res.headers.get("Permissions-Policy"),
+            "camera=(), microphone=(), geolocation=()"
+        )
+
+        # Referrer-Policy
+        self.assertEqual(
+            res.headers.get("Referrer-Policy"),
+            "strict-origin-when-cross-origin"
+        )
+
+        # Content-Security-Policy
+        csp = res.headers.get("Content-Security-Policy", "")
+        self.assertIn("default-src 'self'", csp)
+        self.assertIn("frame-ancestors 'none'", csp)
+        self.assertIn("base-uri 'self'", csp)
+        self.assertIn("form-action 'self'", csp)
+        self.assertIn("nonce-", csp)
+
+    def test_csp_nonce_is_unique_per_request(self):
+        """CSP nonce must be dynamically generated per request."""
+        res1 = self.client.get("/api/health")
+        res2 = self.client.get("/api/health")
+
+        csp1 = res1.headers.get("Content-Security-Policy", "")
+        csp2 = res2.headers.get("Content-Security-Policy", "")
+
+        import re
+        nonce1 = re.search(r"nonce-([A-Za-z0-9_-]+)", csp1).group(1)
+        nonce2 = re.search(r"nonce-([A-Za-z0-9_-]+)", csp2).group(1)
+
+        self.assertIsNotNone(nonce1)
+        self.assertIsNotNone(nonce2)
+        self.assertNotEqual(nonce1, nonce2)
+
+    def test_hsts_header_in_production(self):
+        """HSTS header must include includeSubDomains and preload in production or secure connections."""
+        from cryptography.fernet import Fernet
+        class ProdEnvConfig(TestSecurityConfig):
+            ENV = "production"
+            DEBUG = False
+            TESTING = True
+            SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
+            ENCRYPTION_KEY = Fernet.generate_key().decode()
+            SECRET_KEY = "a_very_long_and_extremely_secure_production_secret_key_12345!"
+            CREATE_DB_TABLES_ON_STARTUP = False
+
+        prod_app = create_app(ProdEnvConfig)
+        prod_client = prod_app.test_client()
+
+        res = prod_client.get("/api/health")
+        hsts = res.headers.get("Strict-Transport-Security", "")
+        self.assertIn("max-age=31536000", hsts)
+        self.assertIn("includeSubDomains", hsts)
+        self.assertIn("preload", hsts)
+
+    def test_hsts_header_on_https_request(self):
+        """HSTS header must be set if request.is_secure."""
+        res = self.client.get("/api/health", base_url="https://localhost")
+        hsts = res.headers.get("Strict-Transport-Security", "")
+        self.assertIn("max-age=31536000", hsts)
+        self.assertIn("includeSubDomains", hsts)
+        self.assertIn("preload", hsts)
+
+    def test_session_cookie_security_flags(self):
+        """Session cookies must be configured with HttpOnly and SameSite Lax/Strict."""
+        self.assertTrue(self.app.config.get("SESSION_COOKIE_HTTPONLY"))
+        self.assertIn(self.app.config.get("SESSION_COOKIE_SAMESITE"), ("Lax", "Strict"))
+
+
+
 
 

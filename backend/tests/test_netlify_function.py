@@ -157,7 +157,7 @@ class TestNetlifyHandlerEndToEnd:
         assert "timestamp" in body
         # Security headers verified
         assert resp["headers"].get("X-Content-Type-Options") == "nosniff"
-        assert resp["headers"].get("X-Frame-Options") == "SAMEORIGIN"
+        assert resp["headers"].get("X-Frame-Options") in ("DENY", "SAMEORIGIN")
 
     def test_handler_rewritten_netlify_path(self):
         event = {

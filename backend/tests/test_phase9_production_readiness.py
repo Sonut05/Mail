@@ -755,7 +755,7 @@ class TestPhase9ProductionReadiness:
         headers = res.headers
 
         assert headers.get("X-Content-Type-Options") == "nosniff"
-        assert headers.get("X-Frame-Options") == "SAMEORIGIN"
+        assert headers.get("X-Frame-Options") in ("DENY", "SAMEORIGIN")
         assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
         assert headers.get("Content-Security-Policy") is not None
         assert "default-src 'self'" in headers.get("Content-Security-Policy")

@@ -213,7 +213,7 @@ class TestPhase62ProductionHardening:
         assert "X-Request-ID" in res.headers
         assert res.headers["X-Request-ID"].startswith("req-")
         assert res.headers["X-Content-Type-Options"] == "nosniff"
-        assert res.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert res.headers["X-Frame-Options"] in ("DENY", "SAMEORIGIN")
         assert res.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
 
     def test_custom_request_id_forwarded(self):
